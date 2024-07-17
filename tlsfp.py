@@ -196,7 +196,7 @@ def make_ja4(data: TLSClientHelloData):
         version = max(b_to_int(v) for v in supported_versions)
     if data.alpn:
         alpns = degrease(data.alpn)
-        alpn = f'{chr(alpns[0][0])}{chr(alpns[0][-1])}'
+        alpn = '99' if alpns[0][0] > 127 else f'{chr(alpns[0][0])}{chr(alpns[0][-1])}'
     ver = TLS_VERSIONS[version]
     sni = 'd' if data.server_name else 'i'
     ciphers_len = len(degrease(data.cipher_suites))
