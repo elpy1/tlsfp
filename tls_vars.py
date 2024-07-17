@@ -9,13 +9,16 @@ TLS_RECORD_PEEK = [0x16, 0x03, 0x01]
 
 # Reserved 'GREASE' values
 # https://datatracker.ietf.org/doc/html/draft-davidben-tls-grease-01
-# $ curl -s 'https://www.iana.org/assignments/tls-parameters/tls-parameters.txt' | grep 'Reserved' | grep -o '0x..,0x..' | sed 's#,0x##g'
-RESERVED = (0x001C, 0x0047, 0x0050, 0x0059, 0x0060, 0x0A0A, 0x1A1A, 0x2A2A,
-            0x3A3A, 0x4A4A, 0x5A5A, 0x6A6A, 0x7A7A, 0x8A8A, 0x9A9A, 0xAAAA,
-            0xBABA, 0xCACA, 0xDADA, 0xEAEA, 0xFAFA, 0xFEFE, 0xFF00)
+# $ curl -s 'https://www.iana.org/assignments/tls-parameters/tls-parameters.txt' \
+# | grep 'Reserved' | grep 'RFC8701'| grep -o '0x..,0x..' | sed 's#,0x##g'
+RESERVED = (0x0A0A, 0x1A1A, 0x2A2A, 0x3A3A, 0x4A4A,
+            0x5A5A, 0x6A6A, 0x7A7A, 0x8A8A, 0x9A9A,
+            0xAAAA,0xBABA, 0xCACA,0xDADA,0xEAEA,0xFAFA)
 
 # Ciphersuite values
-# curl -s 'https://www.iana.org/assignments/tls-parameters/tls-parameters.txt' | grep -^C-P '0x..,0x..\s+TLS[\w]+' | sed 's#,0x##g' | sed 's,   ,: ",g' | sed 's#$#",#g'
+# curl -s 'https://www.iana.org/assignments/tls-parameters/tls-parameters.txt' \
+# | grep -^C-P '0x..,0x..\s+TLS[\w]+' | sed 's#,0x##g' \
+# | sed 's,   ,: ",g' | sed 's#$#",#g'
 CIPHERSUITES = {
     0x0000: "TLS_NULL_WITH_NULL_NULL",
     0x0001: "TLS_RSA_WITH_NULL_MD5",
