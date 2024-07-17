@@ -1,5 +1,5 @@
 # tlsfp
-Run a local HTTPS server or search through a pcap file and return client TLS data and/or fingerprints([**ja3**](https://github.com/salesforce/ja3) and [**ja4**](https://github.com/FoxIO-LLC/ja4)).
+Run a local HTTPS server or search through a pcap file and return client TLS data and/or fingerprints ([**ja3**](https://github.com/salesforce/ja3) and [**ja4**](https://github.com/FoxIO-LLC/ja4)).
 
 ## Background
 I first became interested in TLS fingerprinting when it was offered as a solution by a CDN provider at one of my previous jobs. The Solutions Engineer explained that we could use their new TLS fingerprint hash (instead of a combination of IP address and User-Agent) to block malicious clients who breach the WAF. Another engineer had analysed our WAF data from the previous month and identified a couple of fingerprints to block. I was told the malicious actor had been rotating their IP address to evade detection, enabling them to scrape our website in peace by staying under WAF rate limits. And now, using their SSL fingerprint, we could block them completely.
