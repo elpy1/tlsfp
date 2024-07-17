@@ -13,22 +13,52 @@ It turned out that all Chrome users (using the latest release at the time) were 
 **TLDR**: A WAF deployment that blocked clients based on a TLS fingerprint inadvertently blocked a large chunk of website visitors who were using a specific version of Chrome browser.
 
 ## Getting started
-This project was a great learning experience. Some of the more interesting and challenging bits:
+### What is TLS fingerprinting?
+TLS fingerprinting is a technique used to identify specific clients (e.g. software, web browsers, devices, bots, malware) based on the unique characteristics of their TLS handshake, specifically the Client Hello.  
+The most recent open-source TLS fingerprinting implementation ([**ja4**](https://github.com/FoxIO-LLC/ja4/blob/main/technical_details/JA4.md)) involves building a fingerpring based on these key elements:
+1. Protocol: The protocol used by the client (e.g. TCP or QUIC)
+2. Version: The TLS version used.
+3. SNI: Whether a domain or IP was specified by the client.
+4. Number of Cipher Suites. These are the cryptographic algorithms supported by the client.
+5. Number of Extensions. Extensions are additional options or features supported by the client during the handshake e.g. SNI, ALPN (Application-Layer Protocol Negotiation), and others that enhance the capabilities and performance of the TLS connection.
+6. First ALPN value. This is an extension allowing the application layer to negotiate which protocol should be used over a secure connection (e.g. HTTP1.1 or HTTP/2).
+7. Truncated SHA256 Hash of the Cipher Suites (sorted)
+8. Truncated SHA256 Hash of the Extensions (sorted) + Signature Algorithms (in the order they appear)
+
+Here's an example of a ja4 fingerprint:
+```
+t13d4213h1_171bc101b036_5f0018e59d20
+```
+
+The raw version of the same fingerprint:
+```
+t13d4213h1_002f,0032,0033,0035,0038,0039,003c,003d,0040,0067,006a,006b,009c,009d,009e,009f,00a2,00a3,00ff,1301,1302,1303,1304,c009,c00a,c013,c014,c023,c027,c02b,c02c,c02f,c030,c09c,c09d,c09e,c09f,c0ac,c0ad,cca8,cca9,ccaa_000a,000b,000d,0015,0016,0017,001b,002b,002d,0031,0033_0403,0503,0603,0807,0808,0809,080a,080b,0804,0805,0806,0401,0501,0601,0303,0301,0402,0502,0602,0302,0203,0201,0202
+```
+
+### What I learned
+This project provided a great learning experience. Some of the more interesting and challenging bits:
 - Reading through RFCs to understand the structure of a TLS record and handshake
 - Differences between TLS 1.2 and 1.3
-- Working with binary data and unpacking TLS handshake data
-- How to check the socket recv data before actually consuming the buffer (to capture the client handshake and decide whether to initiate the server-side handshake).
+- Working with binary data and unpacking specific elements of the TLS handshake
+- How to check (or *peek* at) the data in the socket receive buffer before actually consuming it (to capture the client handshake and decide whether to initiate the server-side handshake).
 - Building a very crude barebones HTTP server
 
 Each of these could easily be a separate blog post!
+  
+In regard to TLS fingerprinting, I don't think it's as powerful as I first thought, at least not on its own. Sophisticated actors can easily spoof their handshake data to evade detection or impersonate legitimate clients. However, there are some usecases that come to mind where fingerprinting is probably quite useful:
+- detection of unsophisticated bots and malware
+- traffic anlysis
+- client behaviour analysis
+- intrusion detection
 
-I can confidently say that TLS fingerprinting is not as powerful as you might think, and fingerprints can easily be spoofed. Malicious actors are most likely already abusing this and I assume it will become more difficult to rely on TLS fingerprints in future.
+I'm sure there are many other usecases. I wonder whether TLS fingerprinting becomes more or less useful in future.
 
+### Other learning resources
 Special mention for these excellent resources:
 - **Cloudflare**: [What happens in a TLS handshake?](https://www.cloudflare.com/learning/ssl/what-happens-in-a-tls-handshake/)
+- **Fastly**: [TLS fingerprinting: Current Status and Future Plans](https://www.fastly.com/blog/the-state-of-tls-fingerprinting-whats-working-what-isnt-and-whats-next/)
 - **Michael Driscoll** (github: [syncsynchalt](https://github.com/syncsynchalt)): [The Illustrated TLS 1.3 Connection: Every byte explained and reproduced](https://tls13.xargs.org/#client-hello/annotated)
 - **Command Line Fanatic**: [A walk-through of an SSL handshake](https://commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art059)
-
 
 ## Requirements
 - Python 3.10+
