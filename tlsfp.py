@@ -88,8 +88,8 @@ def parse_tls_record(buf: bytes, raw: bool = False):
     if buf[0] != 0x16:
         raise ValueError('Not a Handshake message.')
     data, rest = unpack_variable(16, buf[3:])
-    if rest:
-        print('Unexpected data in buf. Ignoring.')
+    #if rest:
+    #    print('Unexpected data in buf. Ignoring.')
     return TLSRecord(
         content_type=buf[0:1],
         version=buf[1:3],
@@ -103,8 +103,8 @@ def parse_tls_handshake(buf: bytes, raw: bool = False):
     if buf[0] != 0x01:
         raise ValueError('Not a ClientHello message.')
     data, rest = unpack_variable(24, buf[1:])
-    if rest:
-        print('Unexpected data in buf. Ignoring.')
+    #if rest:
+    #    print('Unexpected data in buf. Ignoring.')
     return TLSHandshake(
         msg_type=buf[0:1],
         length=buf[1:4],
