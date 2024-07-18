@@ -4,7 +4,7 @@ Run a local HTTPS server or search through a pcap file and return client TLS dat
 ## Background
 I first became interested in TLS fingerprinting when it was offered as a solution by a CDN provider at one of my previous jobs. The Solutions Engineer explained that we could use their new TLS fingerprint hash (instead of a combination of IP address and User-Agent) to block malicious clients who breach the WAF. Another engineer had analysed our WAF data from the previous month and identified a couple of fingerprints to block. I was told the malicious actor had been rotating their IP address to evade detection, enabling them to scrape our website in peace by staying under WAF rate limits. And now, using their SSL fingerprint, we could block them completely.
 
-Wow. That's cool, I thought. I was fascinated but had lots of thoughts and questions running through my mind. *Is it really that easy to uniquely identify a user from a TLS handshake?* *That doesn't seem very privacy-preserving.* *Farewell to CGNAT issues?* *How unique are TLS fingerprints?* *What specific data is used to build the fingerprint?* *You're meant to be privacy-conscious elpy, how could you not know about this?* I responded that it sounded great but I wanted to look into it and better understand how it worked before rolling it out. I said I'd get back to them soon and set myself a weekly reminder in slack to investigate.
+Wow. That's cool, I thought. I was fascinated but had lots of thoughts and questions running through my mind. *Is it really that easy to uniquely identify a user from a TLS handshake?* *That doesn't seem very privacy-preserving.* *Farewell to CGNAT issues?* *How unique are TLS fingerprints?* *What specific data is used to build the fingerprint?* I responded that it sounded great but I wanted to look into it and better understand how it worked before rolling it out. I said I'd get back to them soon and set myself a weekly reminder in slack to investigate.
 
 A couple of weeks had passed and I got a reminder email about the deployment. I was busy and hadn't yet looked into it. I confirmed the WAF change had been rolled out to staging and did some quick tests using curl and firefox to make sure nothing was broken. *OK*. *All looks good*. Let's deploy it. Well, 5 minutes later we had our first complaint that the website was down. Luckily it came internally from a staff member, so gathering information for troubleshooting was easy.
 
@@ -202,21 +202,22 @@ $ \time -- python pcap.py --file /tmp/handshakes.pcap 1>/dev/null
 ## Thoughts
 ### What I learnt
 This project provided a great learning experience. Some of the more interesting and challenging bits:
-- Reading through RFCs to understand the structure of a TLS record and handshake
+- Reading through RFCs to understand the structure of TLS records and data within
 - Differences between TLS 1.2 and 1.3
 - Working with binary data and unpacking specific elements of the TLS handshake
 - How to check (or *peek* at) the data in the socket receive buffer before actually consuming it (to capture the client handshake and decide whether to initiate the server-side handshake).
 - Building a very crude barebones HTTP server
 
 Each of these could easily be a separate blog post!
-  
-In regard to TLS fingerprinting, I don't think it's as powerful as I first thought, at least not on its own. Sophisticated actors can easily spoof their handshake data to evade detection or impersonate legitimate clients. However, there are some usecases that come to mind where fingerprinting is probably quite useful:
-- detection of unsophisticated bots and malware
-- traffic anlysis
+
+### The future of fingerprinting
+In regard to TLS fingerprinting, I don't think it's as powerful as I first thought, at least not on its own. JA4 fingerprints are a big improvement on JA3 but sophisticated actors can still easily spoof their handshake data to evade detection or impersonate legitimate clients. Some usecases for fingerprinting that come to mind:
+- detection of bots and malware
+- traffic anlysis and anomaly detection
 - client behaviour analysis
 - intrusion detection
 
-I'm sure there are many other usecases. I wonder whether TLS fingerprinting becomes more or less useful in future.
+I do wonder whether TLS data becomes more or less useful in future. In general I think fingerprinting is likely to become more common as QUIC continues to be adopted, which will surely make traffic inspection and MITM boxes for companies and network providers much more difficult. I assume we'll see more and more different types of data used for fingerprinting, and those who can use big data to find innovative ways to find and combine meaningful fingerprints will benefit most.
 
 ### Further reading
 Special mention for these excellent resources:
