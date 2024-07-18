@@ -1,19 +1,17 @@
 # TLS versions
 TLS_VERSIONS = {
+    0x0301: '10',
+    0x0302: '11',
     0x0303: '12',
     0x0304: '13'
 }
-
-# First 3 bytes indicating a valid TLS record
-TLS_RECORD_PEEK = [0x16, 0x03, 0x01]
 
 # Reserved 'GREASE' values
 # https://datatracker.ietf.org/doc/html/draft-davidben-tls-grease-01
 # $ curl -s 'https://www.iana.org/assignments/tls-parameters/tls-parameters.txt' \
 # | grep 'Reserved' | grep 'RFC8701'| grep -o '0x..,0x..' | sed 's#,0x##g'
-RESERVED = (0x0A0A, 0x1A1A, 0x2A2A, 0x3A3A, 0x4A4A,
-            0x5A5A, 0x6A6A, 0x7A7A, 0x8A8A, 0x9A9A,
-            0xAAAA,0xBABA, 0xCACA,0xDADA,0xEAEA,0xFAFA)
+RESERVED = (0x0A0A, 0x1A1A, 0x2A2A, 0x3A3A, 0x4A4A, 0x5A5A, 0x6A6A, 0x7A7A,
+            0x8A8A, 0x9A9A, 0xAAAA, 0xBABA, 0xCACA, 0xDADA, 0xEAEA, 0xFAFA)
 
 # Ciphersuite values
 # curl -s 'https://www.iana.org/assignments/tls-parameters/tls-parameters.txt' \
