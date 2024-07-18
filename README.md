@@ -35,31 +35,6 @@ The raw version of the same fingerprint:
 t13d4213h2_002f,0032,0033,0035,0038,0039,003c,003d,0040,0067,006a,006b,009c,009d,009e,009f,00a2,00a3,00ff,1301,1302,1303,1304,c009,c00a,c013,c014,c023,c027,c02b,c02c,c02f,c030,c09c,c09d,c09e,c09f,c0ac,c0ad,cca8,cca9,ccaa_000a,000b,000d,0015,0016,0017,001b,002b,002d,0031,0033_0403,0503,0603,0807,0808,0809,080a,080b,0804,0805,0806,0401,0501,0601,0303,0301,0402,0502,0602,0302,0203,0201,0202
 ```
 
-### What I learned
-This project provided a great learning experience. Some of the more interesting and challenging bits:
-- Reading through RFCs to understand the structure of a TLS record and handshake
-- Differences between TLS 1.2 and 1.3
-- Working with binary data and unpacking specific elements of the TLS handshake
-- How to check (or *peek* at) the data in the socket receive buffer before actually consuming it (to capture the client handshake and decide whether to initiate the server-side handshake).
-- Building a very crude barebones HTTP server
-
-Each of these could easily be a separate blog post!
-  
-In regard to TLS fingerprinting, I don't think it's as powerful as I first thought, at least not on its own. Sophisticated actors can easily spoof their handshake data to evade detection or impersonate legitimate clients. However, there are some usecases that come to mind where fingerprinting is probably quite useful:
-- detection of unsophisticated bots and malware
-- traffic anlysis
-- client behaviour analysis
-- intrusion detection
-
-I'm sure there are many other usecases. I wonder whether TLS fingerprinting becomes more or less useful in future.
-
-### Other learning resources
-Special mention for these excellent resources:
-- **Cloudflare**: [What happens in a TLS handshake?](https://www.cloudflare.com/learning/ssl/what-happens-in-a-tls-handshake/)
-- **Fastly**: [TLS fingerprinting: Current Status and Future Plans](https://www.fastly.com/blog/the-state-of-tls-fingerprinting-whats-working-what-isnt-and-whats-next/)
-- **Michael Driscoll** (github: [syncsynchalt](https://github.com/syncsynchalt)): [The Illustrated TLS 1.3 Connection: Every byte explained and reproduced](https://tls13.xargs.org/#client-hello/annotated)
-- **Command Line Fanatic**: [A walk-through of an SSL handshake](https://commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art059)
-
 ## Requirements
 - Python 3.10+
 - Python [curio](https://github.com/dabeaz/curio) module for async socket operations. See [requirements.txt](requirements.txt).
@@ -117,18 +92,17 @@ python server.py --key /tmp/server.key --cert /tmp/server.crt --host 127.0.0.1 -
 #### Make a HTTPS request
 Visit https://localhost:4433/tls in your browser and accept the warning (due to using a self-signed certificate). Alternatively, use `curl --insecure/-k`.
 
-**NOTE:** Notice that fingerprints will generally differ for each client (e.g. `curl` and `firefox`), and some clients even purposefully randomise their handshake data. Different versions of clients are also likely to affect fingerprints. 
+You should get a response that looks something like:
+```
+{"tls_data": {"protocol_version": "0303", "cipher_suites": ["fafa", "1301", "1302", "1303", "c02b", "c02f", "c02c", "c030", "cca9", "cca8", "c013", "c014", "009c", "009d", "002f", "0035"], "extensions": ["caca", "4469", "002b", "001b", "0010", "000b", "000d", "000a", "0012", "0023", "0000", "0005", "0033", "ff01", "002d", "0017", "fafa", "0015"], "server_name": "6c6f63616c686f7374", "ec_point_formats": ["00"], "supported_groups": ["dada", "001d", "0017", "0018"], "alpn": ["6832", "687474702f312e31"], "signature_algorithms": ["0403", "0804", "0401", "0503", "0805", "0501", "0806", "0601"], "supported_versions": ["1a1a", "0304", "0303"]}, "tls_fingerprints": {"ja3_r": "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,17513-43-27-16-11-13-10-18-35-0-5-51-65281-45-23-21,29-23-24,0", "ja3": "b9067e67ecd275c2086c44955ce25543", "ja4_r": "t13d1516h2_002f,0035,009c,009d,1301,1302,1303,c013,c014,c02b,c02c,c02f,c030,cca8,cca9_0005,000a,000b,000d,0012,0015,0017,001b,0023,002b,002d,0033,4469,ff01_0403,0804,0401,0503,0805,0501,0806,0601", "ja4": "t13d1516h2_8daaf6152771_e5627efa2ab1", "ja4_ro": "t13d1516h2_1301,1302,1303,c02b,c02f,c02c,c030,cca9,cca8,c013,c014,009c,009d,002f,0035_4469,002b,001b,0010,000b,000d,000a,0012,0023,0000,0005,0033,ff01,002d,0017,0015_0403,0804,0401,0503,0805,0501,0806,0601", "ja4_o": "t13d1516h2_acb858a92679_4a3e79e229c6"}}
+```
+
+**Try a different browser and check the fingerprint data**. Each different client (e.g. `curl` and `firefox`) is likely to have its own fingerprint. Different versions of clients are also likely to affect fingerprints. It appears some clients even purposefully randomise elements of their handshake data.
 
 ### Example usage with curl and jq
 Get ja4 fingerprint only:
 ```
 $ curl -s -k https://localhost:4433/tls | jq '.tls_fingerprints.ja4'
-"t13d4213h2_171bc101b036_5f0018e59d20"
-```
-Get ja3 and ja4 fingerprints only:
-```
-$ curl -s -k https://localhost:4433/tls | jq '.tls_fingerprints.ja3,.tls_fingerprints.ja4'
-"160803d3ae5b823f4d69b160c1f65837"
 "t13d4213h2_171bc101b036_5f0018e59d20"
 ```
 Get all fingerprints:
@@ -143,170 +117,15 @@ $ curl -s -k https://localhost:4433/tls | jq '.tls_fingerprints'
   "ja4_o": "t13d4213h2_39839e6b3fa6_f26b8825e7be"
 }
 ```
+Some others to try.
+  
 Get cipher suites only:
 ```
 $ curl -s -k https://localhost:4433/tls | jq '.tls_data.cipher_suites'
-[
-  "1302",
-  "1303",
-  "1301",
-  "1304",
-  "c02c",
-  "c030",
-  "cca9",
-  "cca8",
-  "c0ad",
-  "c02b",
-  "c02f",
-  "c0ac",
-  "c023",
-  "c027",
-  "c00a",
-  "c014",
-  "c009",
-  "c013",
-  "009d",
-  "c09d",
-  "009c",
-  "c09c",
-  "003d",
-  "003c",
-  "0035",
-  "002f",
-  "00a3",
-  "009f",
-  "ccaa",
-  "c09f",
-  "00a2",
-  "009e",
-  "c09e",
-  "006b",
-  "006a",
-  "0067",
-  "0040",
-  "0039",
-  "0038",
-  "0033",
-  "0032",
-  "00ff"
-]
 ```
 Get TLS data only:
 ```
 $ curl -s -k https://localhost:4433/tls | jq '.tls_data'
-{
-  "protocol_version": "0303",
-  "cipher_suites": [
-    "1302",
-    "1303",
-    "1301",
-    "1304",
-    "c02c",
-    "c030",
-    "cca9",
-    "cca8",
-    "c0ad",
-    "c02b",
-    "c02f",
-    "c0ac",
-    "c023",
-    "c027",
-    "c00a",
-    "c014",
-    "c009",
-    "c013",
-    "009d",
-    "c09d",
-    "009c",
-    "c09c",
-    "003d",
-    "003c",
-    "0035",
-    "002f",
-    "00a3",
-    "009f",
-    "ccaa",
-    "c09f",
-    "00a2",
-    "009e",
-    "c09e",
-    "006b",
-    "006a",
-    "0067",
-    "0040",
-    "0039",
-    "0038",
-    "0033",
-    "0032",
-    "00ff"
-  ],
-  "extensions": [
-    "0000",
-    "000b",
-    "000a",
-    "0010",
-    "0016",
-    "0017",
-    "0031",
-    "000d",
-    "002b",
-    "002d",
-    "0033",
-    "001b",
-    "0015"
-  ],
-  "server_name": "6c6f63616c686f7374",
-  "ec_point_formats": [
-    "00",
-    "01",
-    "02"
-  ],
-  "supported_groups": [
-    "001d",
-    "0017",
-    "001e",
-    "0019",
-    "0018",
-    "0100",
-    "0101",
-    "0102",
-    "0103",
-    "0104"
-  ],
-  "alpn": [
-    "6832",
-    "687474702f312e31"
-  ],
-  "signature_algorithms": [
-    "0403",
-    "0503",
-    "0603",
-    "0807",
-    "0808",
-    "0809",
-    "080a",
-    "080b",
-    "0804",
-    "0805",
-    "0806",
-    "0401",
-    "0501",
-    "0601",
-    "0303",
-    "0301",
-    "0402",
-    "0502",
-    "0602",
-    "0302",
-    "0203",
-    "0201",
-    "0202"
-  ],
-  "supported_versions": [
-    "0304",
-    "0303"
-  ]
-}
 ```
 
 ### Get the fingerprint from a pcap file
@@ -379,3 +198,30 @@ $ \time -- python pcap.py --file /tmp/handshakes.pcap 1>/dev/null
 0.05user 0.01system 0:00.06elapsed 98%CPU (0avgtext+0avgdata 16692maxresident)k
 0inputs+0outputs (0major+2395minor)pagefaults 0swaps
 ```
+
+## Thoughts
+### What I learnt
+This project provided a great learning experience. Some of the more interesting and challenging bits:
+- Reading through RFCs to understand the structure of a TLS record and handshake
+- Differences between TLS 1.2 and 1.3
+- Working with binary data and unpacking specific elements of the TLS handshake
+- How to check (or *peek* at) the data in the socket receive buffer before actually consuming it (to capture the client handshake and decide whether to initiate the server-side handshake).
+- Building a very crude barebones HTTP server
+
+Each of these could easily be a separate blog post!
+  
+In regard to TLS fingerprinting, I don't think it's as powerful as I first thought, at least not on its own. Sophisticated actors can easily spoof their handshake data to evade detection or impersonate legitimate clients. However, there are some usecases that come to mind where fingerprinting is probably quite useful:
+- detection of unsophisticated bots and malware
+- traffic anlysis
+- client behaviour analysis
+- intrusion detection
+
+I'm sure there are many other usecases. I wonder whether TLS fingerprinting becomes more or less useful in future.
+
+### Further reading
+Special mention for these excellent resources:
+- **Cloudflare**: [What happens in a TLS handshake?](https://www.cloudflare.com/learning/ssl/what-happens-in-a-tls-handshake/)
+- **Fastly**: [TLS fingerprinting: Current Status and Future Plans](https://www.fastly.com/blog/the-state-of-tls-fingerprinting-whats-working-what-isnt-and-whats-next/)
+- **Michael Driscoll** (github: [syncsynchalt](https://github.com/syncsynchalt)): [The Illustrated TLS 1.3 Connection: Every byte explained and reproduced](https://tls13.xargs.org/#client-hello/annotated)
+- **Command Line Fanatic**: [A walk-through of an SSL handshake](https://commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art059)
+
