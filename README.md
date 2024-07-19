@@ -16,7 +16,7 @@ It turned out that all Chrome users (using the latest release at the time) were 
 ### What is TLS fingerprinting?
 TLS fingerprinting is a technique used to identify specific clients (e.g. software, web browsers, devices, bots, malware) based on the unique characteristics of their TLS handshake, specifically the Client Hello.  
 The most recent open-source TLS fingerprinting implementation ([**ja4**](https://github.com/FoxIO-LLC/ja4/blob/main/technical_details/JA4.md)) involves building a fingerpring based on these key elements:
-1. Protocol: The protocol used by the client (e.g. TCP or QUIC)
+1. Protocol: The protocol used by the client (i.e. TCP or QUIC)
 2. Version: The TLS version used.
 3. SNI: Whether a domain or IP was specified by the client.
 4. Number of Cipher Suites. These are the cryptographic algorithms supported by the client.
@@ -43,8 +43,11 @@ t13d4213h2_002f,0032,0033,0035,0038,0039,003c,003d,0040,0067,006a,006b,009c,009d
 - [tlsfp.py](tlsfp.py) is imported and contains functions for unpacking TLS handshake data (specifically the ClientHello message) and building the fingerprints.
 - [tls_vars.py](tls_vars.py) is imported and contains data for verifying and mapping numerous bits of data found in the TLS handshake e.g. cipher suites, signature algorithms etc.
 - [http_helpers.py](http_helpers.py) is imported and contains helper functions for our **very** crude HTTPS server.
-- [server.py](server.py) starts a TCP server and listens on your chosen port. When a connection is received, we check the data in the socket buffer for a TLS handshake message. If it appears valid the server-side TLS handshake is initiated, and the data in the socket recv buffer is consumed. We then check for a valid HTTP request and respond with the client's TLS data (as hex strings) and fingerprints in JSON format.
-- [pcap.py](pcap.py) reads a given binary file, finds all TLS **ja4** fingerprints and prints them out.
+- [server.py](server.py) starts a TCP server and listens on your chosen port. When a connection is received, the data in the socket receive buffer is checked (*peeked* at) to determine whether it apepars to be a client TLS handshake request. If it does, the server-side TLS handshake is initiated and the data in the socket buffer is consumed. After completing the handshake we check for a valid HTTP request and respond with the client's TLS data (as hex strings) and fingerprints in JSON format.
+- [pcap.py](pcap.py) reads a given pcap file, finds all TLS **ja4** fingerprints and prints them out.
+
+### Limitations
+Parsing of QUIC packets not supported at this stage, so only TLS (over TCP) fingerprints are provided.
 
 ## Installation and Usage
 These scripts were created in an effort to learn more about TLS fingerprinting. I've only tested them on my local machine (using `OpenSSL 3.2.1 30 Jan 2024 (Library: OpenSSL 3.2.1 30 Jan 2024)` and `Python 3.12`) with TLS 1.2 and TLS 1.3 data. They are not production-ready.  
@@ -61,24 +64,10 @@ python -mpip install --user -r requirements.txt
 #### Generate a self-signed key and cert for the HTTPS server
 Use `openssl` to generate the private key and certificate:
 ```
-$ openssl req -x509 -newkey rsa:2048 -keyout /tmp/server.key -out /tmp/server.crt -days 365 -nodes
-.......+....+..+......+++++++++++++++++++++++++++++++++++++++*............+...+..........+.........+++++++++++++++++++++++++++++++++++++++*......+.+........+..........+.....+.........+.......+...+...........+....+......+..+....+...........+..........+..+..........+.....+.+......+.....+.++++++
-.....+...........+.+...........+..........+.................+......+..........+..+.......+++++++++++++++++++++++++++++++++++++++*............+.....+.........+......+.......+...+............+..+.+..............+.........+++++++++++++++++++++++++++++++++++++++*....+.......+........+....+..++++++
+$ openssl req -x509 -sha256 -newkey rsa:2048 -keyout /tmp/server.key -out /tmp/server.crt -days 365 -nodes -subj /CN=localhost
+.+...+......+..+...+....+........+++++++++++++++++++++++++++++++++++++++*............+..+.........+.+...+...........+....+...+.........+...+.....+.+......+......+.....+....+........+.+.....+......+..........+...+...+..+......+....+..+......+...+....+........+....+...+............+++++++++++++++++++++++++++++++++++++++*.+..+......+.........++++++
+.......+...+..+...............+...+.+..+.......+..+......+.......+.....+.+............+..+.+.....+......+.+........+...............+...................+..+++++++++++++++++++++++++++++++++++++++*..+++++++++++++++++++++++++++++++++++++++*...........+...+.+.....+................+.....+.+...+...............++++++
 -----
-You are about to be asked to enter information that will be incorporated
-into your certificate request.
-What you are about to enter is what is called a Distinguished Name or a DN.
-There are quite a few fields but you can leave some blank
-For some fields there will be a default value,
-If you enter '.', the field will be left blank.
------
-Country Name (2 letter code) [XX]:AU
-State or Province Name (full name) []:
-Locality Name (eg, city) [Default City]:
-Organization Name (eg, company) [Default Company Ltd]:
-Organizational Unit Name (eg, section) []:
-Common Name (eg, your name or your server's hostname) []:localhost
-Email Address []:
 ```
 
 Verify the newly created `/tmp/server.key` and `/tmp/server.crt` exist.
@@ -89,7 +78,7 @@ Run the server script to listen for connections locally on port 4433:
 python server.py --key /tmp/server.key --cert /tmp/server.crt --host 127.0.0.1 --port 4433
 ```
 
-#### Make a HTTPS request
+#### Get your fingerprints
 Visit https://localhost:4433/tls in your browser and accept the warning (due to using a self-signed certificate). Alternatively, use `curl --insecure/-k`.
 
 You should get a response that looks something like:
@@ -98,6 +87,11 @@ You should get a response that looks something like:
 ```
 
 **Try a different browser and check the fingerprint data**. Each different client (e.g. `curl` and `firefox`) is likely to have its own fingerprint. Different versions of clients are also likely to affect fingerprints. It appears some clients even purposefully randomise elements of their handshake data.
+
+Use `openssl` to view the protocol messages passed between client and server during the TLS handshake:
+```
+$ echo -e 'GET /tls HTTP/1.1\r\nHost:localhost:4433\r\n\r\n' | openssl s_client -connect localhost:4433 -msg
+```
 
 ### Example usage with curl and jq
 Get ja4 fingerprint only:
@@ -207,17 +201,21 @@ This project provided a great learning experience. Some of the more interesting 
 - Working with binary data and unpacking specific elements of the TLS handshake
 - How to check (or *peek* at) the data in the socket receive buffer before actually consuming it (to capture the client handshake and decide whether to initiate the server-side handshake).
 - Building a very crude barebones HTTP server
+- QUIC is going to provide enhanced security and performance but poses challenges for legitimate network monitoring
 
 Each of these could easily be a separate blog post!
 
 ### The future of fingerprinting
-In regard to TLS fingerprinting, I don't think it's as powerful as I first thought, at least not on its own. JA4 fingerprints are a big improvement on JA3 but sophisticated actors can still easily spoof their handshake data to evade detection or impersonate legitimate clients. Some usecases for fingerprinting that come to mind:
-- detection of bots and malware
-- traffic anlysis and anomaly detection
-- client behaviour analysis
-- intrusion detection
+I don't think TLS fingerprinting is as powerful as I first thought, at least not on its own. JA4 is a big improvement on JA3 but sophisticated actors can still easily spoof their handshake data to evade detection or impersonate legitimate clients.
 
-I do wonder whether TLS data becomes more or less useful in future. In general I think fingerprinting is likely to become more common as QUIC continues to be adopted, which will surely make traffic inspection and MITM boxes for companies and network providers much more difficult. I assume we'll see more and more different types of data used for fingerprinting, and those who can use big data to find innovative ways to find and combine meaningful fingerprints will benefit most.
+These are some of the better usecases that come to mind:
+- detection of bots and malware (e.g. blocking known fingerprints)
+- traffic anlysis and anomaly detection (e.g. detecting malicious activity based on unusual patterns in traffic)
+- client behaviour analysis (e.g. detecting a device change and issuing an auth challenge to a user)
+- intrusion detection (e.g. detecting an unauthorised device on a corporate network)
+- MITM detection (e.g. detecting traffic interception attempts)
+
+I wonder whether TLS data will become more or less useful in future. As QUIC adoption continues, I believe fingerprinting will become more prevalent, presenting challenges for companies and network providers that rely on MITM boxes or network traffic snooping. With DNS and HTTP traffic inspection becoming more difficult we'll likely see more diverse types of data used for fingerprinting. Those with access to big data, who can find innovative ways to find and extract meaningful information for fingerprinting, will benefit the most.
 
 ### Further reading
 Special mention for these excellent resources:
