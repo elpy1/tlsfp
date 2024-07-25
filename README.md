@@ -41,66 +41,73 @@ t13d4213h2_002f,0032,0033,0035,0038,0039,003c,003d,0040,0067,006a,006b,009c,009d
 
 ## How it works
 - [tlsfp.py](tlsfp.py) is imported and contains functions for unpacking TLS handshake data (specifically the ClientHello message) and building the fingerprints.
-- [tls_vars.py](tls_vars.py) is imported and contains data for verifying and mapping numerous bits of data found in the TLS handshake e.g. cipher suites, signature algorithms etc.
+- [tls_vars.py](tls_vars.py) is imported and contains data for verifying and mapping numerous bits of data used during a TLS handshake e.g. cipher suites, signature algorithms etc.
+- [server.py](server.py) starts a TCP server and listens on your chosen port. When a connection is received, the data in the socket receive buffer is checked to determine whether it appears to be a client TLS handshake request. If it does, the server-side TLS handshake is initiated and the data in the socket buffer is consumed. After completing the handshake we check for a valid HTTP request and respond with the client's TLS data (as hex strings) and fingerprints in JSON format.
 - [http_helpers.py](http_helpers.py) is imported and contains helper functions for our **very** crude HTTPS server.
-- [server.py](server.py) starts a TCP server and listens on your chosen port. When a connection is received, the data in the socket receive buffer is checked (*peeked* at) to determine whether it apepars to be a client TLS handshake request. If it does, the server-side TLS handshake is initiated and the data in the socket buffer is consumed. After completing the handshake we check for a valid HTTP request and respond with the client's TLS data (as hex strings) and fingerprints in JSON format.
-- [pcap.py](pcap.py) reads a given pcap file, finds all TLS **ja4** fingerprints and prints them out.
+- [pcap.py](pcap.py) reads a given pcap file and finds all TLS ja4 fingerprints and prints them out.
 
-### Limitations
-Parsing of QUIC packets not supported at this stage, so only TLS (over TCP) fingerprints are provided.
+## Security Considerations
+- This tool is intended for educational purposes and is not production-ready.
+- It currently does not support parsing QUIC packets, only TLS over TCP.
+- Use in a secure, controlled environment as it uses self-signed certificates.
 
-## Installation and Usage
-These scripts were created in an effort to learn more about TLS fingerprinting. I've only tested them on my local machine (using `OpenSSL 3.2.1 30 Jan 2024 (Library: OpenSSL 3.2.1 30 Jan 2024)` and `Python 3.12`) with TLS 1.2 and TLS 1.3 data. They are not production-ready.  
-  
-**I strongly recommend only using them locally for learning purposes.**
-
-### Install required python modules
-Use `pip` to install modules from the requirements file:
-```
+## Installation
+Clone the repository and use `pip` to install the required modules:
+```bash
+git clone https://github.com/elpy1/tlsfp.git
+cd tlsfp
 python -mpip install --user -r requirements.txt
 ```
 
+## Usage
+These scripts have been tested on my local machine using `OpenSSL 3.2.1 30 Jan 2024 (Library: OpenSSL 3.2.1 30 Jan 2024)` and `Python 3.12` with TLS 1.2 and TLS 1.3 data.
+
 ### Get fingerprints from HTTPS server
-#### Generate a self-signed key and cert for the HTTPS server
-Use `openssl` to generate the private key and certificate:
-```
+#### Generate a self-signed key and certificate
+Use `openssl` to generate the private key and cert, specifying the CN as `localhost`:
+```bash
 $ openssl req -x509 -sha256 -newkey rsa:2048 -keyout /tmp/server.key -out /tmp/server.crt -days 365 -nodes -subj /CN=localhost
 .+...+......+..+...+....+........+++++++++++++++++++++++++++++++++++++++*............+..+.........+.+...+...........+....+...+.........+...+.....+.+......+......+.....+....+........+.+.....+......+..........+...+...+..+......+....+..+......+...+....+........+....+...+............+++++++++++++++++++++++++++++++++++++++*.+..+......+.........++++++
 .......+...+..+...............+...+.+..+.......+..+......+.......+.....+.+............+..+.+.....+......+.+........+...............+...................+..+++++++++++++++++++++++++++++++++++++++*..+++++++++++++++++++++++++++++++++++++++*...........+...+.+.....+................+.....+.+...+...............++++++
 -----
 ```
 
-Verify the newly created `/tmp/server.key` and `/tmp/server.crt` exist.
+After verifing that the key and certificate files were created successfully, move on to the next step to start the server.
 
-#### Start the server
+#### Start the server locally
 Run the server script to listen for connections locally on port 4433:
-```
+```bash
 python server.py --key /tmp/server.key --cert /tmp/server.crt --host 127.0.0.1 --port 4433
 ```
 
-#### Get your fingerprints
-Visit https://localhost:4433/tls in your browser and accept the warning (due to using a self-signed certificate). Alternatively, use `curl --insecure/-k`.
+#### Get fingerprints
+Visit https://localhost:4433/tls in your browser and accept the warning (due to using a self-signed certificate).
 
-You should get a response that looks something like:
+Alternatively, use `curl --insecure/-k`:
+```bash
+$ curl -v -k https://localhost:4433/tls
+```
+
+The server will return a JSON object with TLS fingerprint data, such as:
 ```
 {"tls_data": {"protocol_version": "0303", "cipher_suites": ["fafa", "1301", "1302", "1303", "c02b", "c02f", "c02c", "c030", "cca9", "cca8", "c013", "c014", "009c", "009d", "002f", "0035"], "extensions": ["caca", "4469", "002b", "001b", "0010", "000b", "000d", "000a", "0012", "0023", "0000", "0005", "0033", "ff01", "002d", "0017", "fafa", "0015"], "server_name": "6c6f63616c686f7374", "ec_point_formats": ["00"], "supported_groups": ["dada", "001d", "0017", "0018"], "alpn": ["6832", "687474702f312e31"], "signature_algorithms": ["0403", "0804", "0401", "0503", "0805", "0501", "0806", "0601"], "supported_versions": ["1a1a", "0304", "0303"]}, "tls_fingerprints": {"ja3_r": "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,17513-43-27-16-11-13-10-18-35-0-5-51-65281-45-23-21,29-23-24,0", "ja3": "b9067e67ecd275c2086c44955ce25543", "ja4_r": "t13d1516h2_002f,0035,009c,009d,1301,1302,1303,c013,c014,c02b,c02c,c02f,c030,cca8,cca9_0005,000a,000b,000d,0012,0015,0017,001b,0023,002b,002d,0033,4469,ff01_0403,0804,0401,0503,0805,0501,0806,0601", "ja4": "t13d1516h2_8daaf6152771_e5627efa2ab1", "ja4_ro": "t13d1516h2_1301,1302,1303,c02b,c02f,c02c,c030,cca9,cca8,c013,c014,009c,009d,002f,0035_4469,002b,001b,0010,000b,000d,000a,0012,0023,0000,0005,0033,ff01,002d,0017,0015_0403,0804,0401,0503,0805,0501,0806,0601", "ja4_o": "t13d1516h2_acb858a92679_4a3e79e229c6"}}
 ```
 
-**Try a different browser and check the fingerprint data**. Each different client (e.g. `curl` and `firefox`) is likely to have its own fingerprint. Different versions of clients are also likely to affect fingerprints. It appears some clients even purposefully randomise elements of their handshake data.
+**Try a different browser and check the fingerprint data**. Each different client (e.g. `curl` and `firefox`) is likely to have its own fingerprint. Different versions of clients are also likely to affect fingerprints. Some clients even purposefully randomise elements of their handshake data.
 
-Use `openssl` to view the protocol messages passed between client and server during the TLS handshake:
-```
+You can use `openssl` to view the protocol messages passed between client and server during the TLS handshake:
+```bash
 $ echo -e 'GET /tls HTTP/1.1\r\nHost:localhost:4433\r\n\r\n' | openssl s_client -connect localhost:4433 -msg
 ```
 
 ### Example usage with curl and jq
 Get ja4 fingerprint only:
-```
+```bash
 $ curl -s -k https://localhost:4433/tls | jq '.tls_fingerprints.ja4'
 "t13d4213h2_171bc101b036_5f0018e59d20"
 ```
 Get all fingerprints:
-```
+```bash
 $ curl -s -k https://localhost:4433/tls | jq '.tls_fingerprints'
 {
   "ja3_r": "771,4866-4867-4865-4868-49196-49200-52393-52392-49325-49195-49199-49324-49187-49191-49162-49172-49161-49171-157-49309-156-49308-61-60-53-47-163-159-52394-49311-162-158-49310-107-106-103-64-57-56-51-50-255,0-11-10-16-22-23-49-13-43-45-51-27-21,29-23-30-25-24-256-257-258-259-260,0-1-2",
@@ -114,23 +121,23 @@ $ curl -s -k https://localhost:4433/tls | jq '.tls_fingerprints'
 Some others to try.
   
 Get cipher suites only:
-```
+```bash
 $ curl -s -k https://localhost:4433/tls | jq '.tls_data.cipher_suites'
 ```
 Get TLS data only:
-```
+```bash
 $ curl -s -k https://localhost:4433/tls | jq '.tls_data'
 ```
 
 ### Get the fingerprint from a pcap file
 #### Use tcpdump to capture packets
 Capture all packets on interface `enp6s0`, filter to only TCP with destination port 443, and save output to `/tmp/wow.pcap`:
-```
+```bash
 $ sudo tcpdump -ni enp6s0 -w /tmp/wow.pcap 'tcp and port 443'
 ``` 
 
 The pcap file:
-```
+```bash
 $ ll /tmp/wow.pcap
 -rw-r--r--. 1 elpy elpy 14M Jul 11 19:27 /tmp/wow.pcap
 ```
@@ -138,20 +145,20 @@ $ ll /tmp/wow.pcap
 #### Capturing only TLS handshakes with tcpdump
 This results in much smaller packet dumps and faster pcap searches.
 
-Same as above example but only captures client TLS handshakes and saves output to `/tmp/handshakes.pcap`:
-```
+Same as above example but only captures client TCP-based TLS handshakes and saves output to `/tmp/handshakes.pcap`:
+```bash
 $ sudo tcpdump -ni enp6s0 -w /tmp/handshakes.pcap '(tcp[((tcp[12:1] & 0xf0) >> 2)+5:1] = 0x01) and (tcp[((tcp[12:1] & 0xf0) >> 2):1] = 0x16)'
 ```
 
 The pcap file (notice the size difference):
-```
+```bash
 $ ll /tmp/handshakes.pcap
 -rw-r--r--. 1 elpy elpy 294K Jul 11 19:29 /tmp/handshakes.pcap
 ```
 
 #### Get all ja4 TLS client fingerprints from pcap file
 Get count of total fingerprints:
-```
+```bash
 $ python pcap.py --file /tmp/wow.pcap | wc -l
 81
 
@@ -160,7 +167,7 @@ $ python pcap.py --file /tmp/handshakes.pcap | wc -l
 ```
 
 Get counts of unique fingerprints:
-```
+```bash
 $ python pcap.py --file /tmp/wow.pcap | sort | uniq -c | sort -nr
      39 t13d1714h1_5b57614c22b0_11c45d407049
      17 t13d1714h1_5b57614c22b0_037af2079008
@@ -183,7 +190,7 @@ $ python pcap.py --file /tmp/handshakes.pcap | sort | uniq -c | sort -nr
 ```
 
 Time taken to print all fingerprints:
-```
+```bash
 $ \time -- python pcap.py --file /tmp/wow.pcap 1> /dev/null:
 0.05user 0.04system 0:00.10elapsed 99%CPU (0avgtext+0avgdata 57600maxresident)k
 0inputs+0outputs (0major+24605minor)pagefaults 0swaps
