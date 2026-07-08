@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from email.utils import formatdate
 
 SERVER_VERSION = 'testing/1.2.3'
 
@@ -12,15 +12,15 @@ STATUS_CODE_MSG = {
     500: 'Internal Server Error'
 }
 
-RESP_TEMPLATE = '''\
-HTTP/1.1 {} {}
-Date: {}
-Server: {}
-Content-Length: {}
-Content-Type: {}
-Connection: close
-
-'''
+RESP_TEMPLATE = (
+    'HTTP/1.1 {} {}\r\n'
+    'Date: {}\r\n'
+    'Server: {}\r\n'
+    'Content-Length: {}\r\n'
+    'Content-Type: {}\r\n'
+    'Connection: close\r\n'
+    '\r\n'
+)
 
 def is_http_request(buf: bytes):
     req = buf[:8].decode('ascii', errors='ignore')
@@ -41,7 +41,7 @@ def http_resp(body='', ctype='text/html; charset=utf-8', status_code=200):
     resp = RESP_TEMPLATE.format(
         str(status_code),
         STATUS_CODE_MSG[status_code],
-        datetime.now(timezone.utc),
+        formatdate(usegmt=True),
         SERVER_VERSION,
         str(len(body.encode())),
         ctype

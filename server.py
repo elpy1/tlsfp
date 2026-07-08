@@ -4,9 +4,11 @@ import json
 import logging
 from curio.socket import IPPROTO_TCP, TCP_NODELAY
 from curio.network import tcp_server
-from curio import run, socket, ssl
+from curio import run, socket, sleep, ssl, timeout_after, TaskTimeout
 from http_helpers import http_resp, is_http_request, parse_request
-from tlsfp import client_hello_data, hexify, make_ja3, make_ja4, parse_tls_record
+from tlsfp import b_to_int, client_hello_data, hexify, make_ja3, make_ja4, parse_tls_record
+
+PEEK_TIMEOUT = 5    # seconds to wait for the full ClientHello record
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)s - %(message)s',
@@ -28,12 +30,38 @@ def parse_args():
     return parser.parse_args()
 
 
+async def peek_exactly(conn, size):
+    """Peek until size bytes are buffered, without consuming them"""
+    peek = await conn.recv(size, socket.MSG_PEEK)
+    while peek and len(peek) < size:
+        await sleep(0.01)   # wait for the rest to arrive
+        peek = await conn.recv(size, socket.MSG_PEEK)
+    return peek
+
+
+async def peek_tls_record(conn):
+    """
+    Peek at the first complete TLS record without consuming it from the
+    socket buffer. Returns None if the data is not a TLS handshake.
+    A ClientHello can exceed a single TCP segment (e.g. Chrome with a
+    post-quantum key share is ~1700 bytes), so keep peeking until the
+    full record length from the header is buffered.
+    """
+    peek = await peek_exactly(conn, 5)
+    if len(peek) < 5 or peek[:3] != b'\x16\x03\x01':
+        return None
+    return await peek_exactly(conn, 5 + b_to_int(peek[3:5]))
+
+
 async def handle(conn, addr):
     """Handles each new connection"""
     conn.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)
     INFO(f'Connection from: {addr[0]}')
-    peek = await conn.recv(1024, socket.MSG_PEEK)
-    if peek and peek[:3] == b'\x16\x03\x01':
+    try:
+        peek = await timeout_after(PEEK_TIMEOUT, peek_tls_record(conn))
+        if not peek:
+            DEBUG('Not a TLS handshake request. Closing connection.')
+            return
         DEBUG(peek)
         conn = await tls.wrap_socket(conn, server_side=True)
         buf = await conn.recv(4096)
@@ -56,9 +84,12 @@ async def handle(conn, addr):
             else:
                 resp = http_resp(status_code=405)
             await conn.send(resp.encode())
-    else:
-        DEBUG('Not a TLS handshake request. Closing connection.')
-    await conn.close()
+    except TaskTimeout:
+        WARNING(f'Timed out waiting for TLS record from {addr[0]}')
+    except Exception as e:
+        WARNING(f'Error handling connection from {addr[0]}: {e!r}')
+    finally:
+        await conn.close()
 
 
 if __name__ == "__main__":
