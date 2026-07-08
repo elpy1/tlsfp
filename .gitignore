@@ -1,0 +1,10 @@
+# python bytecode / caches
+__pycache__/
+*.py[cod]
+
+# virtual environments
+venv/
+.venv/
+
+# packet captures
+*.pcap
