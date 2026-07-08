@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 import argparse
+import functools
 import json
 import logging
-from curio.socket import IPPROTO_TCP, TCP_NODELAY
-from curio.network import tcp_server
-from curio import run, socket, sleep, ssl, timeout_after, TaskTimeout
+import ssl
+from socket import IPPROTO_TCP, TCP_NODELAY, MSG_PEEK
+import trio
 from http_helpers import http_resp, is_http_request, parse_request
 from tlsfp import b_to_int, client_hello_data, hexify, make_ja3, make_ja4, parse_tls_record
 
@@ -30,16 +31,16 @@ def parse_args():
     return parser.parse_args()
 
 
-async def peek_exactly(conn, size):
+async def peek_exactly(stream, size):
     """Peek until size bytes are buffered, without consuming them"""
-    peek = await conn.recv(size, socket.MSG_PEEK)
+    peek = await stream.socket.recv(size, MSG_PEEK)
     while peek and len(peek) < size:
-        await sleep(0.01)   # wait for the rest to arrive
-        peek = await conn.recv(size, socket.MSG_PEEK)
+        await trio.sleep(0.01)   # wait for the rest to arrive
+        peek = await stream.socket.recv(size, MSG_PEEK)
     return peek
 
 
-async def peek_tls_record(conn):
+async def peek_tls_record(stream):
     """
     Peek at the first complete TLS record without consuming it from the
     socket buffer. Returns None if the data is not a TLS handshake.
@@ -47,24 +48,28 @@ async def peek_tls_record(conn):
     post-quantum key share is ~1700 bytes), so keep peeking until the
     full record length from the header is buffered.
     """
-    peek = await peek_exactly(conn, 5)
+    peek = await peek_exactly(stream, 5)
     if len(peek) < 5 or peek[:3] != b'\x16\x03\x01':
         return None
-    return await peek_exactly(conn, 5 + b_to_int(peek[3:5]))
+    return await peek_exactly(stream, 5 + b_to_int(peek[3:5]))
 
 
-async def handle(conn, addr):
+async def handle(stream):
     """Handles each new connection"""
-    conn.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)
+    stream.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)
+    addr = stream.socket.getpeername()
     INFO(f'Connection from: {addr[0]}')
     try:
-        peek = await timeout_after(PEEK_TIMEOUT, peek_tls_record(conn))
+        with trio.fail_after(PEEK_TIMEOUT):
+            peek = await peek_tls_record(stream)
         if not peek:
             DEBUG('Not a TLS handshake request. Closing connection.')
             return
         DEBUG(peek)
-        conn = await tls.wrap_socket(conn, server_side=True)
-        buf = await conn.recv(4096)
+        stream = trio.SSLStream(stream, tls, server_side=True,
+                                https_compatible=True)
+        await stream.do_handshake()
+        buf = await stream.receive_some(4096)
         if buf and is_http_request(buf):
             INFO(buf)
             req, path, headers = parse_request(buf)
@@ -83,13 +88,13 @@ async def handle(conn, addr):
                     resp = http_resp(body=r'¯\_(ツ)_/¯', status_code=404)
             else:
                 resp = http_resp(status_code=405)
-            await conn.send(resp.encode())
-    except TaskTimeout:
+            await stream.send_all(resp.encode())
+    except trio.TooSlowError:
         WARNING(f'Timed out waiting for TLS record from {addr[0]}')
     except Exception as e:
         WARNING(f'Error handling connection from {addr[0]}: {e!r}')
     finally:
-        await conn.close()
+        await stream.aclose()
 
 
 if __name__ == "__main__":
@@ -97,7 +102,9 @@ if __name__ == "__main__":
         args = parse_args()
         tls = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         tls.load_cert_chain(args.cert, args.key)
-        run(tcp_server(args.host, args.port, handle))
-    except KeyboardInterrupt as e:
+        trio.run(functools.partial(trio.serve_tcp, handle, args.port, host=args.host))
+    # trio delivers Ctrl-C wrapped in a BaseExceptionGroup from the
+    # server nursery, so a plain `except KeyboardInterrupt` won't match
+    except* KeyboardInterrupt:
         ERROR('Keyboard interrupt. Exiting.')
-        raise SystemExit(1) from e
+        raise SystemExit(1) from None

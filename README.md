@@ -36,8 +36,8 @@ t13d4213h2_002f,0032,0033,0035,0038,0039,003c,003d,0040,0067,006a,006b,009c,009d
 ```
 
 ## Requirements
-- Python 3.10+
-- Python [curio](https://github.com/dabeaz/curio) module for async socket operations. See [requirements.txt](requirements.txt).
+- Python 3.11+
+- Python [trio](https://github.com/python-trio/trio) module for async socket operations. See [requirements.txt](requirements.txt).
 
 ## How it works
 - [tlsfp.py](tlsfp.py) is imported and contains functions for unpacking TLS handshake data (specifically the ClientHello message) and building the fingerprints.
