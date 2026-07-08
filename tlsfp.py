@@ -1,6 +1,6 @@
 from hashlib import md5, sha256
 from typing import NamedTuple
-from tls_vars import *
+from tls_vars import RESERVED, TLS_VERSIONS
 
 class TLSRecord(NamedTuple):
     """
@@ -76,11 +76,11 @@ class TLSClientHelloData(NamedTuple):
     cipher_suites: list
     extensions: list
     server_name: bytes | None = None
-    ec_point_formats: list = []
-    supported_groups: list = []
-    alpn: list = []
-    signature_algorithms: list = []
-    supported_versions: list = []
+    ec_point_formats: list = ()
+    supported_groups: list = ()
+    alpn: list = ()
+    signature_algorithms: list = ()
+    supported_versions: list = ()
 
 
 def parse_tls_record(buf: bytes, raw: bool = False):
@@ -116,7 +116,7 @@ def parse_client_hello(buf: bytes):
     """Check and parse TLS ClientHello"""
     items = []
     offset = 0
-    items.append(buf[offset:2])                     # Protocol Version (2 bytes)
+    items.append(buf[offset:offset+2])              # Protocol Version (2 bytes)
     offset +=2
     items.append(buf[offset:offset+32])             # Random (32 bytes)
     offset +=32
@@ -154,7 +154,7 @@ def degrease(data: list[bytes]):
     building the TLS fingerprints.
     https://www.rfc-editor.org/rfc/rfc8701.html
     """
-    if not isinstance(data, list):
+    if not isinstance(data, (list, tuple)):
         raise TypeError('Invalid data. Expected a list.')
     return [s for s in data if b_to_int(s) not in RESERVED]
 
@@ -188,26 +188,38 @@ def make_ja4(data: TLSClientHelloData):
             fp = [i for i in fp if b_to_int(i) not in (0, 16)]
         return ','.join([i.hex() for i in degrease(fp)])
 
+    def alpn_chars(value):
+        # First and last characters of the first ALPN value. If either is
+        # non-alphanumeric (0-9, A-Z, a-z), the first and last hex digits
+        # of the value are used instead.
+        if not value:
+            return '00'
+        first, last = chr(value[0]), chr(value[-1])
+        if all(c.isascii() and c.isalnum() for c in (first, last)):
+            return first + last
+        return value.hex()[0] + value.hex()[-1]
+
     transport = 't'     # TLS over TCP is all we accept at this stage
     version = b_to_int(data.protocol_version)
     alpn = '00'
-    if data.supported_versions:
-        supported_versions = degrease(data.supported_versions)
+    if supported_versions := degrease(data.supported_versions):
         version = max(b_to_int(v) for v in supported_versions)
-    if data.alpn:
-        alpns = degrease(data.alpn)
-        alpn = '99' if alpns[0][0] > 127 else f'{chr(alpns[0][0])}{chr(alpns[0][-1])}'
-    ver = TLS_VERSIONS[version]
+    if alpns := degrease(data.alpn):
+        alpn = alpn_chars(alpns[0])
+    ver = TLS_VERSIONS.get(version, '00')
     sni = 'd' if data.server_name else 'i'
-    ciphers_len = len(degrease(data.cipher_suites))
-    extensions_len = len(degrease(data.extensions))
+    ciphers_len = min(len(degrease(data.cipher_suites)), 99)
+    extensions_len = min(len(degrease(data.extensions)), 99)
     sig_algs = ja4_seq(data.signature_algorithms)
 
     seg1 = f'{transport}{ver}{sni}{ciphers_len:02}{extensions_len:02}{alpn}'
     seg2_ro = ja4_seq(data.cipher_suites)
     seg2_r = ja4_seq(sorted(data.cipher_suites))
-    seg3_ro = ja4_seq(data.extensions)+'_'+sig_algs
-    seg3_r = ja4_seq(sorted(data.extensions), rm_exts=True)+'_'+sig_algs
+    seg3_ro = ja4_seq(data.extensions)
+    seg3_r = ja4_seq(sorted(data.extensions), rm_exts=True)
+    if sig_algs:    # no trailing '_' when there are no signature algorithms
+        seg3_ro += '_' + sig_algs
+        seg3_r += '_' + sig_algs
 
     return {
         'ja4_r':  f'{seg1}_{seg2_r}_{seg3_r}',
@@ -306,7 +318,7 @@ def intify(data):
     """Convert data in bytes to int"""
     if isinstance(data, dict):
         return {k: intify(v) for k, v in data.items()}
-    elif isinstance(data, list):
+    elif isinstance(data, (list, tuple)):
         return [intify(item) for item in data]
     elif isinstance(data, bytes):
         return b_to_int(data)
@@ -318,7 +330,7 @@ def hexify(data):
     """Convert data in bytes to hex"""
     if isinstance(data, dict):
         return {k: hexify(v) for k, v in data.items()}
-    elif isinstance(data, list):
+    elif isinstance(data, (list, tuple)):
         return [hexify(item) for item in data]
     elif isinstance(data, bytes):
         return data.hex()
